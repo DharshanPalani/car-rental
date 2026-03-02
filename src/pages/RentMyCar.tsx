@@ -65,16 +65,31 @@ const RentMyCar = () => {
 
     setUser(user);
 
-    // Check KYC status
-    const { data: kycDocs } = await supabase
-      .from("kyc_documents")
-      .select("*")
-      .eq("user_id", user.id)
-      .order("uploaded_at", { ascending: false })
-      .limit(1);
+    // First check the user's kyc_status from users table
+    const { data: userData, error: userError } = await supabase
+      .from("users")
+      .select("kyc_status")
+      .eq("id", user.id)
+      .single();
 
-    if (kycDocs && kycDocs.length > 0) {
-      setKycStatus(kycDocs[0].status);
+    if (userData && userData.kyc_status) {
+      console.log("User KYC status from users table:", userData.kyc_status);
+      setKycStatus(userData.kyc_status);
+    } else {
+      // Fallback to checking kyc_documents
+      const { data: kycDocs } = await supabase
+        .from("kyc_documents")
+        .select("status")
+        .eq("user_id", user.id)
+        .order("uploaded_at", { ascending: false })
+        .limit(1);
+
+      if (kycDocs && kycDocs.length > 0) {
+        console.log("KYC status from documents:", kycDocs[0].status);
+        setKycStatus(kycDocs[0].status);
+      } else {
+        setKycStatus(null);
+      }
     }
   };
 
@@ -169,6 +184,17 @@ const RentMyCar = () => {
     }
   };
 
+  useEffect(() => {
+    checkUserAndKYC();
+    loadUserVehicles();
+  }, []);
+
+  // Add this useEffect to log when kycStatus changes
+  useEffect(() => {
+    console.log("Current kycStatus:", kycStatus);
+    console.log("Should show Add button?", kycStatus === "approved");
+  }, [kycStatus]);
+
   const handleKYCUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!e.target.files || !user) return;
 
@@ -177,6 +203,13 @@ const RentMyCar = () => {
 
     try {
       await kycApi.uploadDocument(user.id, "drivers_license", file);
+
+      // Also update the users table status
+      await supabase
+        .from("users")
+        .update({ kyc_status: "pending" })
+        .eq("id", user.id);
+
       toast.success("KYC document uploaded successfully! Pending review.");
       setKycStatus("pending");
     } catch (error) {

@@ -35,7 +35,7 @@ function App() {
           <Route path="rent-car" element={<RentCar />} />
           <Route path="search" element={<SearchResults />} />
           <Route
-            path="admin"
+            path="admin/dashboard"
             element={
               <ProtectedRoute allowedRoles={["admin"]}>
                 <AdminDashboard />

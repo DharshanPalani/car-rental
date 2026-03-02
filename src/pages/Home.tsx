@@ -1,61 +1,74 @@
 // src/pages/Home.tsx
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
-import {
-  Search,
-  Calendar,
-  MapPin,
-  Car,
-  Shield,
-  Star,
-  Users,
-  Clock,
-} from "lucide-react";
+import { Car, Shield, Star, Users, Clock } from "lucide-react";
 import { SearchBar } from "../components/UI/SearchBar";
 import { CarCard } from "../components/UI/CarCard";
+import { supabase } from "../lib/supabase";
+import type { Vehicle } from "../types";
 
 const Home = () => {
-  const [featuredCars] = useState([
-    {
-      id: "1",
-      make: "Toyota",
-      model: "Camry",
-      year: 2022,
-      daily_rate: 45,
-      images: [
-        "https://images.unsplash.com/photo-1621007947382-bb3c3994e3fb?w=500",
-      ],
-      location: "Chennai",
-      transmission: "automatic",
-      seats: 5,
-    },
-    {
-      id: "2",
-      make: "Honda",
-      model: "Civic",
-      year: 2021,
-      daily_rate: 40,
-      images: [
-        "https://images.unsplash.com/photo-1590362891991-f776e747a588?w=500",
-      ],
-      location: "Bangalore",
-      transmission: "manual",
-      seats: 5,
-    },
-    {
-      id: "3",
-      make: "Hyundai",
-      model: "Creta",
-      year: 2023,
-      daily_rate: 50,
-      images: [
-        "https://images.unsplash.com/photo-1631295868223-63265b40d9e4?w=500",
-      ],
-      location: "Mumbai",
-      transmission: "automatic",
-      seats: 5,
-    },
-  ]);
+  const [featuredCars, setFeaturedCars] = useState<Vehicle[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [stats, setStats] = useState({
+    totalVehicles: 0,
+    totalUsers: 0,
+    totalCities: 0,
+  });
+
+  useEffect(() => {
+    fetchFeaturedCars();
+    fetchStats();
+  }, []);
+
+  const fetchFeaturedCars = async () => {
+    try {
+      const { data, error } = await supabase
+        .from("vehicles")
+        .select("*")
+        .eq("is_available", true)
+        .order("created_at", { ascending: false })
+        .limit(6);
+
+      if (error) throw error;
+      setFeaturedCars(data || []);
+    } catch (error) {
+      console.error("Error fetching featured cars:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchStats = async () => {
+    try {
+      // Get total available vehicles
+      const { count: vehicleCount } = await supabase
+        .from("vehicles")
+        .select("*", { count: "exact", head: true })
+        .eq("is_available", true);
+
+      // Get total users (excluding admins maybe)
+      const { count: userCount } = await supabase
+        .from("users")
+        .select("*", { count: "exact", head: true });
+
+      // Get unique cities from vehicles
+      const { data: cities } = await supabase
+        .from("vehicles")
+        .select("location")
+        .eq("is_available", true);
+
+      const uniqueCities = new Set(cities?.map((v) => v.location)).size;
+
+      setStats({
+        totalVehicles: vehicleCount || 0,
+        totalUsers: userCount || 0,
+        totalCities: uniqueCities || 0,
+      });
+    } catch (error) {
+      console.error("Error fetching stats:", error);
+    }
+  };
 
   return (
     <div>
@@ -94,6 +107,32 @@ const Home = () => {
         <div className="relative -mb-16 container mx-auto px-4 sm:px-6 lg:px-8">
           <div className="bg-white rounded-lg shadow-xl p-6">
             <SearchBar />
+          </div>
+        </div>
+      </section>
+
+      {/* Stats Section */}
+      <section className="pt-24 pb-12">
+        <div className="container mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+            <div className="bg-white rounded-lg shadow-lg p-8 text-center">
+              <div className="text-4xl font-bold text-primary-600 mb-2">
+                {stats.totalVehicles}+
+              </div>
+              <div className="text-gray-600 font-medium">Cars Available</div>
+            </div>
+            <div className="bg-white rounded-lg shadow-lg p-8 text-center">
+              <div className="text-4xl font-bold text-primary-600 mb-2">
+                {stats.totalUsers}+
+              </div>
+              <div className="text-gray-600 font-medium">Happy Users</div>
+            </div>
+            <div className="bg-white rounded-lg shadow-lg p-8 text-center">
+              <div className="text-4xl font-bold text-primary-600 mb-2">
+                {stats.totalCities}+
+              </div>
+              <div className="text-gray-600 font-medium">Cities Covered</div>
+            </div>
           </div>
         </div>
       </section>
@@ -167,11 +206,27 @@ const Home = () => {
             </p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-            {featuredCars.map((car) => (
-              <CarCard key={car.id} car={car} />
-            ))}
-          </div>
+          {loading ? (
+            <div className="flex justify-center items-center h-64">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600"></div>
+            </div>
+          ) : featuredCars.length === 0 ? (
+            <div className="text-center py-12">
+              <Car className="h-16 w-16 text-gray-400 mx-auto mb-4" />
+              <h3 className="text-xl font-semibold text-gray-700 mb-2">
+                No vehicles available yet
+              </h3>
+              <p className="text-gray-500">
+                Be the first to list your car and start earning!
+              </p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+              {featuredCars.map((car) => (
+                <CarCard key={car.id} car={car} />
+              ))}
+            </div>
+          )}
 
           <div className="text-center mt-12">
             <Link
@@ -207,11 +262,6 @@ const Home = () => {
                   Create your account and complete the KYC verification process
                 </p>
               </div>
-              {window.innerWidth >= 768 && (
-                <div className="hidden md:block absolute top-1/2 right-0 transform translate-x-1/2 -translate-y-1/2">
-                  <div className="w-8 h-0.5 bg-gray-300"></div>
-                </div>
-              )}
             </div>
 
             <div className="relative">
@@ -224,11 +274,6 @@ const Home = () => {
                   List your car as an owner or search for cars as a renter
                 </p>
               </div>
-              {window.innerWidth >= 768 && (
-                <div className="hidden md:block absolute top-1/2 right-0 transform translate-x-1/2 -translate-y-1/2">
-                  <div className="w-8 h-0.5 bg-gray-300"></div>
-                </div>
-              )}
             </div>
 
             <div>

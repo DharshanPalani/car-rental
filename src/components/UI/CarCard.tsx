@@ -54,7 +54,7 @@ export const CarCard = ({ car, onBook }: CarCardProps) => {
         <div className="flex items-center justify-between">
           <div>
             <span className="text-2xl font-bold text-primary-600">
-              ${car.daily_rate}
+              ₹{car.daily_rate}
             </span>
             <span className="text-gray-500">/day</span>
           </div>
