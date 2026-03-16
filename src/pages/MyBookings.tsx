@@ -4,8 +4,8 @@ import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
 import { Car, Calendar, DollarSign } from "lucide-react";
-import { supabase } from "../lib/supabase";
-import { bookingApi } from "../lib/api";
+import { authApi, bookingApi } from "../lib/api";
+import { getImageSrc } from "../components/UI/CarCard";
 import type { Booking } from "../types";
 
 interface BookingWithVehicle extends Booking {
@@ -30,9 +30,7 @@ const MyBookings = () => {
     try {
       setLoading(true);
 
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
+      const user = await authApi.getCurrentUser();
 
       if (!user) {
         toast.error("Please login to view your bookings");
@@ -114,10 +112,7 @@ const MyBookings = () => {
                 >
                   <div className="flex items-start space-x-4">
                     <img
-                      src={
-                        booking.vehicle?.images?.[0] ||
-                        "https://via.placeholder.com/200x150"
-                      }
+                      src={getImageSrc(booking.vehicle?.images || [])}
                       alt={
                         booking.vehicle
                           ? `${booking.vehicle.make} ${booking.vehicle.model}`

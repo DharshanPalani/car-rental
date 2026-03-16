@@ -3,8 +3,7 @@ import { useState, useEffect } from "react";
 import { useSearchParams } from "react-router-dom";
 import { Search, Filter, MapPin, Car } from "lucide-react";
 import { CarCard } from "../components/UI/CarCard";
-import { vehicleApi } from "../lib/api";
-import { supabase } from "../lib/supabase";
+import { vehicleApi, authApi } from "../lib/api";
 import type { Vehicle, SearchFilters } from "../types";
 
 const RentCar = () => {
@@ -29,9 +28,7 @@ const RentCar = () => {
     try {
       // include excludeOwnerId so that owners don't see their own cars when browsing
       const extendedFilters = { ...filters } as any;
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
+      const user = await authApi.getCurrentUser();
       if (user?.id) {
         extendedFilters.excludeOwnerId = user.id;
       }

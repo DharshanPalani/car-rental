@@ -1,7 +1,7 @@
 // src/components/Auth/ProtectedRoute.tsx
 import { type ReactNode, useEffect, useState } from "react";
 import { Navigate } from "react-router-dom";
-import { supabase } from "../../lib/supabase";
+import { authApi } from "../../lib/api";
 import type { User } from "../../types";
 
 interface ProtectedRouteProps {
@@ -22,18 +22,8 @@ export const ProtectedRoute = ({
 
   const checkUser = async () => {
     try {
-      const {
-        data: { user: authUser },
-      } = await supabase.auth.getUser();
-
-      if (authUser) {
-        const { data } = await supabase
-          .from("users")
-          .select("*")
-          .eq("id", authUser.id)
-          .single();
-        setUser(data);
-      }
+      const user = await authApi.getCurrentUser();
+      setUser(user);
     } catch (error) {
       console.error("Error checking user:", error);
     } finally {

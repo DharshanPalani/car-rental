@@ -3,8 +3,8 @@ import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
 import { MapPin, Car } from "lucide-react";
-import { supabase } from "../lib/supabase";
-import { bookingApi, vehicleApi } from "../lib/api";
+import { authApi, bookingApi, vehicleApi } from "../lib/api";
+import { getImageSrc } from "../components/UI/CarCard";
 import type { Vehicle } from "../types";
 
 // payment form removed – bookings are confirmed on‑spot without Stripe
@@ -39,9 +39,7 @@ const BookingCheckout = () => {
 
   const checkAuth = async () => {
     try {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
+      const user = await authApi.getCurrentUser();
 
       if (!user) {
         toast.error("Please login to continue with booking");
@@ -76,13 +74,10 @@ const BookingCheckout = () => {
 
       // Get current user
       console.log("Getting current user...");
-      const {
-        data: { user },
-        error: userError,
-      } = await supabase.auth.getUser();
+      const user = await authApi.getCurrentUser();
 
-      if (userError || !user) {
-        console.error("Error getting user:", userError);
+      if (!user) {
+        console.error("Error getting user");
         toast.error("Please login to continue with booking");
         navigate("/login", { state: { from: `/booking/${id}` } });
         return;
@@ -190,9 +185,7 @@ const BookingCheckout = () => {
                 <h2 className="text-xl font-bold mb-4">Vehicle Details</h2>
                 <div className="flex items-start space-x-4">
                   <img
-                    src={
-                      vehicle.images[0] || "https://via.placeholder.com/200x150"
-                    }
+                    src={getImageSrc(vehicle.images)}
                     alt={`${vehicle.make} ${vehicle.model}`}
                     className="w-32 h-24 object-cover rounded-lg"
                   />

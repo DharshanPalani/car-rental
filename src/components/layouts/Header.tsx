@@ -2,7 +2,7 @@
 import { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Car, Menu, X, User, LogOut } from "lucide-react";
-import { supabase } from "../../lib/supabase";
+import { authApi } from "../../lib/api";
 import type { User as AppUser } from "../../types";
 
 export const Header = () => {
@@ -12,42 +12,15 @@ export const Header = () => {
 
   useEffect(() => {
     const getUser = async () => {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      if (user) {
-        const { data } = await supabase
-          .from("users")
-          .select("*")
-          .eq("id", user.id)
-          .single();
-        setUser(data);
-      }
+      const user = await authApi.getCurrentUser();
+      setUser(user);
     };
     getUser();
-
-    const { data: authListener } = supabase.auth.onAuthStateChange(
-      async (_event, session) => {
-        if (session?.user) {
-          const { data } = await supabase
-            .from("users")
-            .select("*")
-            .eq("id", session.user.id)
-            .single();
-          setUser(data);
-        } else {
-          setUser(null);
-        }
-      },
-    );
-
-    return () => {
-      authListener?.subscription.unsubscribe();
-    };
   }, []);
 
   const handleSignOut = async () => {
-    await supabase.auth.signOut();
+    await authApi.signOut();
+    setUser(null);
     navigate("/");
   };
 

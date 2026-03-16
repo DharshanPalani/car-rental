@@ -4,8 +4,8 @@ import { useForm } from "react-hook-form";
 import toast from "react-hot-toast";
 import { Upload, X, Plus, Car, MapPin, DollarSign } from "lucide-react";
 
-import { supabase } from "../lib/supabase";
-import { vehicleApi } from "../lib/api";
+import { authApi, vehicleApi } from "../lib/api";
+import { getImageSrc } from "../components/UI/CarCard";
 import type { Vehicle } from "../types";
 
 interface VehicleFormData {
@@ -45,25 +45,23 @@ const RentMyCar = () => {
   }, []);
 
   const checkUser = async () => {
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
+    const currentUser = await authApi.getCurrentUser();
 
-    if (!user) {
+    if (!currentUser) {
       navigate("/login");
       return;
     }
 
-    setUser(user);
+    setUser(currentUser);
   };
 
   const loadUserVehicles = async () => {
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
+    const currentUser = await authApi.getCurrentUser();
 
-    if (user) {
-      const vehicles = await vehicleApi.getOwnerVehicles(user.id);
+    if (currentUser) {
+      console.log("Fetching vehicles for user:", currentUser.id);
+      const vehicles = await vehicleApi.getOwnerVehicles(currentUser.id);
+      console.log("Vehicles fetched:", vehicles);
       setVehicles(vehicles);
     }
   };
@@ -80,25 +78,34 @@ const RentMyCar = () => {
   };
 
   const uploadImages = async (vehicleId: string) => {
-    const imageUrls: string[] = [];
+    const formData = new FormData();
 
-    for (const image of images) {
-      const fileName = `${vehicleId}/${Date.now()}_${image.name}`;
+    images.forEach((image) => {
+      formData.append("images", image);
+    });
 
-      const { error } = await supabase.storage
-        .from("vehicle-images")
-        .upload(fileName, image);
+    formData.append("vehicleId", vehicleId);
 
-      if (error) throw error;
+    try {
+      console.log("Sending upload request to backend...");
+      const response = await fetch("http://localhost:3002/upload", {
+        method: "POST",
+        body: formData,
+      });
 
-      const {
-        data: { publicUrl },
-      } = supabase.storage.from("vehicle-images").getPublicUrl(fileName);
+      console.log("Upload response status:", response.status);
+      if (!response.ok) {
+        throw new Error("Upload failed");
+      }
 
-      imageUrls.push(publicUrl);
+      const result = await response.json();
+      console.log("Backend response:", result);
+      console.log("Returned images:", result.images);
+      return result.images;
+    } catch (error) {
+      console.error("Image upload error:", error);
+      throw new Error("Failed to upload images");
     }
-
-    return imageUrls;
   };
 
   const onSubmit = async (data: VehicleFormData) => {
@@ -115,6 +122,7 @@ const RentMyCar = () => {
     setUploading(true);
 
     try {
+      console.log("Creating vehicle with initial data...");
       const vehicle = await vehicleApi.create({
         owner_id: user.id,
         ...data,
@@ -124,12 +132,18 @@ const RentMyCar = () => {
         images: [],
         is_available: true,
       });
+      console.log("Vehicle created:", vehicle);
 
+      console.log("Uploading images...");
       const imageUrls = await uploadImages(vehicle.id);
+      console.log("Image URLs received:", imageUrls);
 
-      await vehicleApi.update(vehicle.id, {
+      console.log("Updating vehicle with images...");
+      const updatedVehicle = await vehicleApi.update(vehicle.id, {
         images: imageUrls,
       });
+      console.log("Vehicle updated successfully:", updatedVehicle);
+      console.log("Updated vehicle images:", updatedVehicle.images);
 
       toast.success("Vehicle listed successfully!");
 
@@ -345,7 +359,7 @@ const RentMyCar = () => {
               {vehicles.map((vehicle) => (
                 <div key={vehicle.id} className="bg-white rounded shadow">
                   <img
-                    src={vehicle.images[0] || "https://via.placeholder.com/400"}
+                    src={getImageSrc(vehicle.images)}
                     className="h-48 w-full object-cover"
                   />
 

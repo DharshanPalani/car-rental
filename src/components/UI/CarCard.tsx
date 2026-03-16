@@ -2,7 +2,7 @@
 import { useNavigate } from "react-router-dom";
 import { useState, useEffect } from "react";
 import { MapPin, Users, Settings, Fuel } from "lucide-react";
-import { supabase } from "../../lib/supabase";
+import { authApi } from "../../lib/api";
 import type { Vehicle } from "../../types";
 
 interface CarCardProps {
@@ -11,19 +11,95 @@ interface CarCardProps {
   onBook?: (vehicleId: string) => void;
 }
 
+// Utility function to get correct image source
+export const getImageSrc = (images: string[]) => {
+  console.log("getImageSrc called with:", images);
+
+  if (!images || images.length === 0) {
+    console.log("No images array or empty, returning placeholder");
+    return "https://via.placeholder.com/400x300";
+  }
+
+  const imageKey = images[0];
+  console.log("First image key:", imageKey);
+
+  // Check if it's a backend URL (starts with /uploads)
+  if (imageKey.startsWith("/uploads/")) {
+    const fullUrl = `http://localhost:3002${imageKey}`;
+    console.log("Returning backend URL:", fullUrl);
+    return fullUrl;
+  }
+
+  // Check if it's a localStorage key (starts with 'car_image_')
+  if (imageKey.startsWith("car_image_")) {
+    const dataUrl = localStorage.getItem(imageKey);
+    if (dataUrl) {
+      console.log("Returning localStorage data URL");
+      return dataUrl;
+    }
+  }
+
+  // Check if it's a data URL
+  if (imageKey.startsWith("data:")) {
+    console.log("Returning data URL");
+    return imageKey;
+  }
+
+  // Check localStorage mapping for development (legacy)
+  const mappings = JSON.parse(localStorage.getItem("imageMappings") || "{}");
+  if (mappings[imageKey]) {
+    console.log("Returning legacy mapping");
+    return mappings[imageKey];
+  }
+
+  console.log("No match found, returning placeholder");
+  // Return the URL as-is (will fallback to placeholder if not found)
+  return imageKey;
+};
+
 export const CarCard = ({ car, onBook }: CarCardProps) => {
   const navigate = useNavigate();
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [imageSrc, setImageSrc] = useState<string>("");
 
   useEffect(() => {
     let mounted = true;
-    supabase.auth.getUser().then(({ data: { user } }) => {
+    authApi.getCurrentUser().then((user) => {
       if (mounted) setCurrentUserId(user?.id ?? null);
     });
+
+    // Handle image loading with fallback
+    const loadImage = async () => {
+      try {
+        // Try to get images from the server API
+        const response = await fetch(
+          `http://localhost:3002/api/vehicle/${car.id}/images`,
+        );
+        if (response.ok) {
+          const result = await response.json();
+          if (result.success && result.images.length > 0) {
+            // Use the first image from the API
+            const imageUrl = result.images[0];
+            if (imageUrl.startsWith("/uploads/")) {
+              setImageSrc(`http://localhost:3002${imageUrl}`);
+              return;
+            }
+          }
+        }
+      } catch (error) {
+        console.error("Failed to fetch images from API:", error);
+      }
+
+      // Fallback to existing logic
+      setImageSrc(getImageSrc(car.images));
+    };
+
+    loadImage();
+
     return () => {
       mounted = false;
     };
-  }, []);
+  }, [car.images]);
 
   const isOwner = currentUserId === car.owner_id;
 
@@ -35,7 +111,7 @@ export const CarCard = ({ car, onBook }: CarCardProps) => {
   return (
     <div className="bg-white rounded-lg shadow-lg overflow-hidden hover:shadow-xl transition">
       <img
-        src={car.images[0] || "https://via.placeholder.com/400x300"}
+        src={imageSrc}
         alt={`${car.make} ${car.model}`}
         className="w-full h-48 object-cover"
       />

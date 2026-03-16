@@ -2,9 +2,8 @@
 import { useState, useEffect } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import { MapPin, Grid, List } from "lucide-react";
-import { CarCard } from "../components/UI/CarCard";
-import { vehicleApi } from "../lib/api";
-import { supabase } from "../lib/supabase";
+import { CarCard, getImageSrc } from "../components/UI/CarCard";
+import { vehicleApi, authApi } from "../lib/api";
 import type { Vehicle } from "../types";
 
 const SearchResults = () => {
@@ -31,9 +30,7 @@ const SearchResults = () => {
       };
 
       // figure out current user to exclude their own listings
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
+      const user = await authApi.getCurrentUser();
       if (user?.id) {
         filters.excludeOwnerId = user.id;
       }
@@ -143,9 +140,7 @@ const SearchResults = () => {
                 className="bg-white rounded-lg shadow-lg overflow-hidden flex flex-col md:flex-row"
               >
                 <img
-                  src={
-                    vehicle.images[0] || "https://via.placeholder.com/400x300"
-                  }
+                  src={getImageSrc(vehicle.images)}
                   alt={`${vehicle.make} ${vehicle.model}`}
                   className="w-full md:w-64 h-48 object-cover"
                 />
