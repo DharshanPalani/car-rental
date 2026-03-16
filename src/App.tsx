@@ -13,6 +13,7 @@ import Login from "./pages/Login";
 import Register from "./pages/Register";
 import "./App.css";
 import AdminDashboard from "./pages/AdminDashboard";
+import MyBookings from "./pages/MyBookings";
 
 function App() {
   return (
@@ -47,6 +48,14 @@ function App() {
             element={
               <ProtectedRoute allowedRoles={["customer"]}>
                 <BookingCheckout />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="my-bookings"
+            element={
+              <ProtectedRoute allowedRoles={["customer"]}>
+                <MyBookings />
               </ProtectedRoute>
             }
           />

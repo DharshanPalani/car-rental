@@ -1,52 +1,24 @@
 // src/pages/RentCar.tsx
 import { useState, useEffect } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
-import {
-  Search,
-  Filter,
-  MapPin,
-  Calendar,
-  DollarSign,
-  Car,
-  Users,
-  Settings,
-} from "lucide-react";
-import { DateRange } from "react-date-range";
-import "react-date-range/dist/styles.css";
-import "react-date-range/dist/theme/default.css";
+import { useSearchParams } from "react-router-dom";
+import { Search, Filter, MapPin, Car } from "lucide-react";
 import { CarCard } from "../components/UI/CarCard";
 import { vehicleApi } from "../lib/api";
+import { supabase } from "../lib/supabase";
 import type { Vehicle, SearchFilters } from "../types";
 
 const RentCar = () => {
-  const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [loading, setLoading] = useState(true);
   const [showFilters, setShowFilters] = useState(false);
   const [filters, setFilters] = useState<SearchFilters>({
     location: searchParams.get("location") || "",
-    startDate: searchParams.get("startDate")
-      ? new Date(searchParams.get("startDate")!)
-      : undefined,
-    endDate: searchParams.get("endDate")
-      ? new Date(searchParams.get("endDate")!)
-      : undefined,
     minPrice: undefined,
     maxPrice: undefined,
     transmission: undefined,
     seats: undefined,
   });
-
-  const [dateRange, setDateRange] = useState([
-    {
-      startDate: filters.startDate || new Date(),
-      endDate:
-        filters.endDate ||
-        new Date(new Date().setDate(new Date().getDate() + 3)),
-      key: "selection",
-    },
-  ]);
 
   useEffect(() => {
     loadVehicles();
@@ -55,7 +27,16 @@ const RentCar = () => {
   const loadVehicles = async () => {
     setLoading(true);
     try {
-      const data = await vehicleApi.getAll(filters);
+      // include excludeOwnerId so that owners don't see their own cars when browsing
+      const extendedFilters = { ...filters } as any;
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (user?.id) {
+        extendedFilters.excludeOwnerId = user.id;
+      }
+
+      const data = await vehicleApi.getAll(extendedFilters);
       setVehicles(data);
     } catch (error) {
       console.error("Error loading vehicles:", error);
@@ -69,15 +50,6 @@ const RentCar = () => {
     loadVehicles();
   };
 
-  const handleDateChange = (ranges: any) => {
-    setDateRange([ranges.selection]);
-    setFilters({
-      ...filters,
-      startDate: ranges.selection.startDate,
-      endDate: ranges.selection.endDate,
-    });
-  };
-
   const handleFilterChange = (key: keyof SearchFilters, value: any) => {
     setFilters({ ...filters, [key]: value });
   };
@@ -85,20 +57,11 @@ const RentCar = () => {
   const clearFilters = () => {
     setFilters({
       location: "",
-      startDate: undefined,
-      endDate: undefined,
       minPrice: undefined,
       maxPrice: undefined,
       transmission: undefined,
       seats: undefined,
     });
-    setDateRange([
-      {
-        startDate: new Date(),
-        endDate: new Date(new Date().setDate(new Date().getDate() + 3)),
-        key: "selection",
-      },
-    ]);
   };
 
   return (
@@ -115,7 +78,7 @@ const RentCar = () => {
             onSubmit={handleSearch}
             className="bg-white rounded-lg shadow-xl p-6"
           >
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Location
@@ -129,45 +92,6 @@ const RentCar = () => {
                       handleFilterChange("location", e.target.value)
                     }
                     placeholder="City or location"
-                    className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Pickup Date
-                </label>
-                <div className="relative">
-                  <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
-                  <input
-                    type="date"
-                    value={filters.startDate?.toISOString().split("T")[0] || ""}
-                    onChange={(e) =>
-                      handleFilterChange("startDate", new Date(e.target.value))
-                    }
-                    min={new Date().toISOString().split("T")[0]}
-                    className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Return Date
-                </label>
-                <div className="relative">
-                  <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
-                  <input
-                    type="date"
-                    value={filters.endDate?.toISOString().split("T")[0] || ""}
-                    onChange={(e) =>
-                      handleFilterChange("endDate", new Date(e.target.value))
-                    }
-                    min={
-                      filters.startDate?.toISOString().split("T")[0] ||
-                      new Date().toISOString().split("T")[0]
-                    }
                     className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
                   />
                 </div>
@@ -205,19 +129,6 @@ const RentCar = () => {
                   >
                     Clear all
                   </button>
-                </div>
-
-                {/* Date Range Picker */}
-                <div className="mb-6">
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Date Range
-                  </label>
-                  <DateRange
-                    ranges={dateRange}
-                    onChange={handleDateChange}
-                    minDate={new Date()}
-                    rangeColors={["#3b82f6"]}
-                  />
                 </div>
 
                 {/* Price Range */}
@@ -339,13 +250,15 @@ const RentCar = () => {
               {/* Results Header */}
               <div className="bg-white rounded-lg shadow-lg p-4 mb-6">
                 <div className="flex items-center justify-between">
-                  <p className="text-gray-600">
-                    Found{" "}
-                    <span className="font-bold text-gray-900">
-                      {vehicles.length}
-                    </span>{" "}
-                    vehicles
-                  </p>
+                  <div>
+                    <p className="text-gray-600">
+                      Found{" "}
+                      <span className="font-bold text-gray-900">
+                        {vehicles.length}
+                      </span>{" "}
+                      vehicles
+                    </p>
+                  </div>
                   <button
                     onClick={() => setShowFilters(!showFilters)}
                     className="lg:hidden flex items-center text-primary-600"

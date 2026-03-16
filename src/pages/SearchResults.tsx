@@ -1,17 +1,10 @@
 // src/pages/SearchResults.tsx
 import { useState, useEffect } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
-import {
-  MapPin,
-  Calendar,
-  DollarSign,
-  Filter,
-  Grid,
-  List,
-  Star,
-} from "lucide-react";
+import { MapPin, Grid, List } from "lucide-react";
 import { CarCard } from "../components/UI/CarCard";
 import { vehicleApi } from "../lib/api";
+import { supabase } from "../lib/supabase";
 import type { Vehicle } from "../types";
 
 const SearchResults = () => {
@@ -25,23 +18,27 @@ const SearchResults = () => {
   );
 
   const location = searchParams.get("location");
-  const startDate = searchParams.get("startDate");
-  const endDate = searchParams.get("endDate");
 
   useEffect(() => {
     loadVehicles();
-  }, [location, startDate, endDate, sortBy]);
+  }, [location, sortBy]);
 
   const loadVehicles = async () => {
     setLoading(true);
     try {
-      const filters = {
+      const filters: any = {
         location: location || undefined,
-        startDate: startDate ? new Date(startDate) : undefined,
-        endDate: endDate ? new Date(endDate) : undefined,
       };
 
-      let data = await vehicleApi.getAll(filters);
+      // figure out current user to exclude their own listings
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (user?.id) {
+        filters.excludeOwnerId = user.id;
+      }
+
+      let data: Vehicle[] = await vehicleApi.getAll(filters);
 
       // Sort vehicles
       data = data.sort((a, b) => {
@@ -59,12 +56,7 @@ const SearchResults = () => {
   };
 
   const handleBooking = (vehicleId: string) => {
-    const params = new URLSearchParams({
-      vehicleId,
-      startDate: startDate || "",
-      endDate: endDate || "",
-    });
-    navigate(`/booking/${vehicleId}?${params.toString()}`);
+    navigate(`/booking/${vehicleId}`);
   };
 
   return (
@@ -82,13 +74,6 @@ const SearchResults = () => {
                   <div className="flex items-center">
                     <MapPin className="h-4 w-4 mr-1" />
                     {location}
-                  </div>
-                )}
-                {startDate && endDate && (
-                  <div className="flex items-center">
-                    <Calendar className="h-4 w-4 mr-1" />
-                    {new Date(startDate).toLocaleDateString()} -{" "}
-                    {new Date(endDate).toLocaleDateString()}
                   </div>
                 )}
               </div>

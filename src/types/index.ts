@@ -78,12 +78,15 @@ export interface KycDocument {
 
 export interface SearchFilters {
   location?: string;
-  startDate?: Date;
-  endDate?: Date;
+  // ISO date string (YYYY-MM-DD) or Date object; API normalizes internally
+  startDate?: string | Date;
+  endDate?: string | Date;
   make?: string;
   model?: string;
   minPrice?: number;
   maxPrice?: number;
   transmission?: string;
   seats?: number;
+  // exclude vehicles owned by this user (useful when browsing for bookings)
+  excludeOwnerId?: string;
 }

@@ -23,12 +23,23 @@ const Home = () => {
 
   const fetchFeaturedCars = async () => {
     try {
-      const { data, error } = await supabase
+      // determine if we need to exclude the signed-in user's own vehicles
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
+      let query = supabase
         .from("vehicles")
         .select("*")
         .eq("is_available", true)
         .order("created_at", { ascending: false })
         .limit(6);
+
+      if (user?.id) {
+        query = query.neq("owner_id", user.id);
+      }
+
+      const { data, error } = await query;
 
       if (error) throw error;
       setFeaturedCars(data || []);

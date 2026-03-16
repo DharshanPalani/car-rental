@@ -27,7 +27,7 @@ export const Header = () => {
     getUser();
 
     const { data: authListener } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
+      async (_event, session) => {
         if (session?.user) {
           const { data } = await supabase
             .from("users")
@@ -68,6 +68,12 @@ export const Header = () => {
               className="text-gray-700 hover:text-primary-600 transition"
             >
               Rent a Car
+            </Link>
+            <Link
+              to="/my-bookings"
+              className="text-gray-700 hover:text-primary-600 transition"
+            >
+              My Bookings
             </Link>
             <Link
               to="/rent-my-car"
@@ -129,6 +135,13 @@ export const Header = () => {
                 onClick={() => setIsOpen(false)}
               >
                 Rent a Car
+              </Link>
+              <Link
+                to="/my-bookings"
+                className="text-gray-700 hover:text-primary-600 px-2 py-1"
+                onClick={() => setIsOpen(false)}
+              >
+                My Bookings
               </Link>
               <Link
                 to="/rent-my-car"

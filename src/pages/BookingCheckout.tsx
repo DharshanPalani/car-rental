@@ -1,159 +1,139 @@
 // src/pages/BookingCheckout.tsx
 import { useState, useEffect } from "react";
-import { useParams, useSearchParams, useNavigate } from "react-router-dom";
-import { loadStripe } from "@stripe/stripe-js";
-import {
-  Elements,
-  PaymentElement,
-  useStripe,
-  useElements,
-} from "@stripe/react-stripe-js";
+import { useParams, useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
-import { Calendar, MapPin, DollarSign, Shield, Clock, Car } from "lucide-react";
+import { MapPin, Car } from "lucide-react";
 import { supabase } from "../lib/supabase";
 import { bookingApi, vehicleApi } from "../lib/api";
-import type { Vehicle, Booking } from "../types";
+import type { Vehicle } from "../types";
 
-const stripePromise = loadStripe(import.meta.env.VITE_STRIPE_PUBLIC_KEY);
-
-const CheckoutForm = ({
-  booking,
-  vehicle,
-  onSuccess,
-}: {
-  booking: Booking;
-  vehicle: Vehicle;
-  onSuccess: () => void;
-}) => {
-  const stripe = useStripe();
-  const elements = useElements();
-  const [processing, setProcessing] = useState(false);
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-
-    if (!stripe || !elements) return;
-
-    setProcessing(true);
-
-    const { error } = await stripe.confirmPayment({
-      elements,
-      confirmParams: {
-        return_url: `${window.location.origin}/booking/success?booking_id=${booking.id}`,
-      },
-      redirect: "if_required",
-    });
-
-    if (error) {
-      toast.error(error.message || "Payment failed");
-      setProcessing(false);
-    } else {
-      // Update booking status
-      await bookingApi.updateStatus(booking.id, "paid");
-      toast.success("Booking confirmed!");
-      onSuccess();
-    }
-  };
-
-  return (
-    <form onSubmit={handleSubmit} className="space-y-6">
-      <PaymentElement />
-      <button
-        type="submit"
-        disabled={!stripe || processing}
-        className="w-full bg-primary-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-primary-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
-      >
-        {processing ? "Processing..." : `Pay $${booking.total_cost}`}
-      </button>
-    </form>
-  );
-};
+// payment form removed – bookings are confirmed on‑spot without Stripe
 
 const BookingCheckout = () => {
   const { id } = useParams<{ id: string }>();
-  const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const [vehicle, setVehicle] = useState<Vehicle | null>(null);
-  const [booking, setBooking] = useState<Booking | null>(null);
   const [loading, setLoading] = useState(true);
-  const [clientSecret, setClientSecret] = useState("");
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [userId, setUserId] = useState<string | null>(null);
+  const [confirming, setConfirming] = useState(false);
 
-  const startDate = searchParams.get("startDate");
-  const endDate = searchParams.get("endDate");
+  const todayStr = new Date().toISOString().split("T")[0];
+  const displayStart = todayStr;
+  const displayEnd = todayStr;
+
+  // Debug logs - remove in production
+  console.log("BookingCheckout mounted with id:", id);
+  console.log("vehicleApi:", vehicleApi);
+  console.log("vehicleApi.getById:", vehicleApi?.getById);
 
   useEffect(() => {
-    if (!id || !startDate || !endDate) {
-      navigate("/rent-car");
-      return;
+    checkAuth();
+  }, []);
+
+  useEffect(() => {
+    if (isAuthenticated && id) {
+      initializeBooking();
     }
-    initializeBooking();
-  }, [id, startDate, endDate]);
+  }, [isAuthenticated, id]);
 
-  const initializeBooking = async () => {
+  const checkAuth = async () => {
     try {
-      // Load vehicle details
-      const vehicleData = await vehicleApi.getById(id!);
-      setVehicle(vehicleData);
-
-      // Calculate total cost
-      const start = new Date(startDate!);
-      const end = new Date(endDate!);
-      const days = Math.ceil(
-        (end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24),
-      );
-      const totalCost = days * vehicleData.daily_rate;
-
-      // Check availability
-      const isAvailable = await bookingApi.checkAvailability(
-        id!,
-        startDate!,
-        endDate!,
-      );
-      if (!isAvailable) {
-        toast.error("Vehicle is not available for selected dates");
-        navigate("/rent-car");
-        return;
-      }
-
-      // Get current user
       const {
         data: { user },
       } = await supabase.auth.getUser();
+
       if (!user) {
-        navigate("/login");
+        toast.error("Please login to continue with booking");
+        navigate("/login", { state: { from: `/booking/${id}` } });
         return;
       }
-
-      // Create booking
-      const bookingData = await bookingApi.create({
-        vehicle_id: id!,
-        customer_id: user.id,
-        owner_id: vehicleData.owner_id,
-        start_date: startDate!,
-        end_date: endDate!,
-        total_cost: totalCost,
-        status: "pending",
-      });
-
-      setBooking(bookingData);
-
-      // Create payment intent (you'll need to implement this on your backend)
-      const response = await fetch("/api/create-payment-intent", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          amount: totalCost * 100, // in cents
-          booking_id: bookingData.id,
-        }),
-      });
-
-      const { clientSecret } = await response.json();
-      setClientSecret(clientSecret);
+      setIsAuthenticated(true);
     } catch (error) {
-      console.error("Error initializing booking:", error);
-      toast.error("Failed to initialize booking");
+      console.error("Auth check error:", error);
+      toast.error("Authentication error");
+      navigate("/login");
+    }
+  };
+
+  const initializeBooking = async () => {
+    try {
+      setLoading(true);
+      console.log("Initializing booking with id:", id);
+
+      // ignore dates, always today
+
+      // Load vehicle details
+      console.log("Loading vehicle details for ID:", id);
+      if (!vehicleApi || typeof vehicleApi.getById !== "function") {
+        console.error("vehicleApi.getById is not available:", vehicleApi);
+        toast.error("API configuration error");
+        return;
+      }
+      const vehicleData = await vehicleApi.getById(id!);
+      console.log("Vehicle data loaded:", vehicleData);
+      setVehicle(vehicleData);
+
+      // Get current user
+      console.log("Getting current user...");
+      const {
+        data: { user },
+        error: userError,
+      } = await supabase.auth.getUser();
+
+      if (userError || !user) {
+        console.error("Error getting user:", userError);
+        toast.error("Please login to continue with booking");
+        navigate("/login", { state: { from: `/booking/${id}` } });
+        return;
+      }
+      setUserId(user.id);
+
+      // Prevent owners from booking their own vehicles
+      if (vehicleData.owner_id === user.id) {
+        toast.error("You cannot book your own vehicle");
+        navigate("/rent-car");
+        return;
+      }
+    } catch (error) {
+      console.error("Detailed error in initializeBooking:", error);
+      toast.error(
+        error instanceof Error ? error.message : "Failed to initialize booking",
+      );
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleConfirm = async () => {
+    if (!vehicle || !userId) return;
+    setConfirming(true);
+    try {
+      const todayStr = new Date().toISOString().split("T")[0];
+      const daysComputed = Math.max(
+        1,
+        Math.ceil(
+          (new Date(displayEnd).getTime() - new Date(displayStart).getTime()) /
+            (1000 * 60 * 60 * 24),
+        ),
+      );
+      const totalCost = daysComputed * vehicle.daily_rate;
+      await bookingApi.create({
+        vehicle_id: id!,
+        customer_id: userId,
+        owner_id: vehicle.owner_id,
+        start_date: todayStr,
+        end_date: todayStr,
+        total_cost: totalCost,
+        status: "paid",
+      });
+      toast.success("Booking confirmed!");
+      navigate("/my-bookings");
+    } catch (error) {
+      console.error("Error creating booking:", error);
+      toast.error("Failed to confirm booking. Please try again.");
+    } finally {
+      setConfirming(false);
     }
   };
 
@@ -165,16 +145,16 @@ const BookingCheckout = () => {
     );
   }
 
-  if (!vehicle || !booking) {
+  if (!vehicle) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
           <Car className="h-16 w-16 text-gray-400 mx-auto mb-4" />
           <h2 className="text-2xl font-bold text-gray-900 mb-2">
-            Booking Not Found
+            Vehicle Not Found
           </h2>
           <p className="text-gray-600 mb-6">
-            The booking you're looking for doesn't exist.
+            The vehicle you're trying to book doesn't exist.
           </p>
           <button
             onClick={() => navigate("/rent-car")}
@@ -187,9 +167,12 @@ const BookingCheckout = () => {
     );
   }
 
-  const days = Math.ceil(
-    (new Date(endDate!).getTime() - new Date(startDate!).getTime()) /
-      (1000 * 60 * 60 * 24),
+  const days = Math.max(
+    1,
+    Math.ceil(
+      (new Date(displayEnd).getTime() - new Date(displayStart).getTime()) /
+        (1000 * 60 * 60 * 24),
+    ),
   );
 
   return (
@@ -246,7 +229,7 @@ const BookingCheckout = () => {
                       Pickup Date
                     </label>
                     <p className="text-lg font-semibold">
-                      {new Date(startDate!).toLocaleDateString("en-US", {
+                      {new Date(displayStart).toLocaleDateString("en-US", {
                         weekday: "long",
                         year: "numeric",
                         month: "long",
@@ -259,7 +242,7 @@ const BookingCheckout = () => {
                       Return Date
                     </label>
                     <p className="text-lg font-semibold">
-                      {new Date(endDate!).toLocaleDateString("en-US", {
+                      {new Date(displayEnd).toLocaleDateString("en-US", {
                         weekday: "long",
                         year: "numeric",
                         month: "long",
@@ -274,16 +257,14 @@ const BookingCheckout = () => {
               </div>
 
               <div className="bg-white rounded-lg shadow-lg p-6">
-                <h2 className="text-xl font-bold mb-4">Payment Details</h2>
-                {clientSecret && (
-                  <Elements stripe={stripePromise} options={{ clientSecret }}>
-                    <CheckoutForm
-                      booking={booking}
-                      vehicle={vehicle}
-                      onSuccess={() => navigate("/booking/success")}
-                    />
-                  </Elements>
-                )}
+                <h2 className="text-xl font-bold mb-4">Confirm Booking</h2>
+                <button
+                  onClick={handleConfirm}
+                  disabled={confirming}
+                  className="w-full bg-primary-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-primary-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {confirming ? "Confirming..." : "Confirm Booking"}
+                </button>
               </div>
             </div>
 
@@ -309,22 +290,16 @@ const BookingCheckout = () => {
                     <div className="flex justify-between font-bold">
                       <span>Total</span>
                       <span className="text-xl text-primary-600">
-                        ${booking.total_cost}
+                        ${vehicle.daily_rate * days}
                       </span>
                     </div>
                   </div>
                 </div>
 
-                <div className="space-y-3 text-sm text-gray-600">
-                  <div className="flex items-start">
-                    <Shield className="h-5 w-5 text-green-500 mr-2 flex-shrink-0" />
-                    <span>Your payment is secure and encrypted</span>
-                  </div>
-                  <div className="flex items-start">
-                    <Clock className="h-5 w-5 text-blue-500 mr-2 flex-shrink-0" />
-                    <span>Free cancellation within 24 hours</span>
-                  </div>
-                </div>
+                <p className="text-sm text-gray-600">
+                  Your booking will be confirmed immediately and no online
+                  payment is required.
+                </p>
               </div>
             </div>
           </div>
