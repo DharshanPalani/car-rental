@@ -1,12 +1,14 @@
 @echo off
 echo Starting server and dev...
 
-start "SERVER" cmd /k npm run server
-start "DEV" cmd /k npm run dev
+start "" /b cmd /c "npm run server"
+set SERVER_PID=%!
 
-echo Press Ctrl+C to stop everything...
+start "" /b cmd /c "npm run dev"
+set DEV_PID=%!
 
-pause
+echo Press Ctrl+C to stop...
 
-taskkill /FI "WINDOWTITLE eq SERVER" /T /F
-taskkill /FI "WINDOWTITLE eq DEV" /T /F
+:loop
+timeout /t 1 >nul
+goto loop
