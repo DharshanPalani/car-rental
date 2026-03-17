@@ -433,37 +433,85 @@ export const vehicleApi = {
 };
 
 // Booking functions
+// Booking functions
 export const bookingApi = {
   create: async (booking: any) => {
     const id = generateId();
     const created_at = currentTimestamp();
     const updated_at = created_at;
-    const newBooking = { ...booking, id, created_at, updated_at };
+
+    const newBooking = {
+      ...booking,
+      id,
+      created_at,
+      updated_at,
+    };
+
     db.execute("INSERT INTO bookings VALUES (?)", [newBooking]);
+
     return newBooking;
   },
 
   getById: async (id: string) => {
     const bookings = db.execute("SELECT * FROM bookings WHERE id = ?", [id]);
-    return bookings[0] || null;
+    const booking = bookings[0];
+
+    if (!booking) return null;
+
+    const vehicles = db.execute("SELECT * FROM vehicles");
+    const vehicle = vehicles.find((v: any) => v.id === booking.vehicle_id);
+
+    return {
+      ...booking,
+      vehicle,
+    };
   },
 
   getUserBookings: async (userId: string, role: "customer" | "owner") => {
     const field = role === "customer" ? "customer_id" : "owner_id";
-    return db.execute(`SELECT * FROM bookings WHERE ${field} = ?`, [userId]);
+
+    // get bookings
+    const bookings = db.execute(`SELECT * FROM bookings WHERE ${field} = ?`, [
+      userId,
+    ]);
+
+    // get all vehicles
+    const vehicles = db.execute("SELECT * FROM vehicles");
+
+    // create quick lookup map (faster than find loop)
+    const vehicleMap: Record<string, any> = {};
+    vehicles.forEach((v: any) => {
+      vehicleMap[v.id] = v;
+    });
+
+    // attach vehicle to booking
+    const bookingsWithVehicles = bookings.map((booking: any) => {
+      return {
+        ...booking,
+        vehicle: vehicleMap[booking.vehicle_id] || null,
+      };
+    });
+
+    return bookingsWithVehicles;
   },
 
   updateStatus: async (id: string, status: string) => {
     const bookings = db.execute("SELECT * FROM bookings WHERE id = ?", [id]);
+
     if (bookings[0]) {
       const updated = {
         ...bookings[0],
         status,
         updated_at: currentTimestamp(),
       };
-      db.execute("UPDATE bookings SET ? WHERE id = ?", [updated, id]);
+
+      // simple replace approach
+      db.execute("DELETE FROM bookings WHERE id = ?", [id]);
+      db.execute("INSERT INTO bookings VALUES (?)", [updated]);
+
       return updated;
     }
+
     throw new Error("Booking not found");
   },
 
@@ -472,7 +520,7 @@ export const bookingApi = {
     _startDate: string,
     _endDate: string,
   ) => {
-    // Simplified: always available
+    // simplified logic
     return true;
   },
 };

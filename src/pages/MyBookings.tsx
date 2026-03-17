@@ -69,6 +69,12 @@ const MyBookings = () => {
     }
   };
 
+  // console.log(bookings);
+  // bookings.map((booking) => {
+  //   console.log("My bookings");
+  //   console.log(booking);
+  // });
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
